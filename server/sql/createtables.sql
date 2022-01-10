@@ -1,0 +1,16 @@
+
+
+CREATE TABLE IF NOT EXISTS tasks(
+title TEXT NOT NULL ,
+description TEXT NOT NULL ,
+deadline TEXT NOT NULL ,
+tags TEXT NOT NULL ,
+owner TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+email VARCHAR NOT NULL ,
+login VARCHAR PRIMARY KEY NOT NULL ,
+password VARCHAR NOT NULL
+);
+

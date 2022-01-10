@@ -1,0 +1,254 @@
+package max.lab6.server.commands;
+
+import max.lab6.server.Pair;
+import max.lab6.server.Tags;
+import max.lab6.server.Task;
+import max.lab6.server.execution.Server;
+import org.json.CDL;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import users.Connection;
+
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+
+public class ComandFactory {
+
+
+    /**
+     * Удаляет элемент из коллекции
+     */
+    private static Comandable removeCmd = (jsonElement, manager, id) -> {
+        String owner = ((Connection) Server.getConnections().get(id).attachment()).getLogin();
+        Task card = new Task(new JSONObject(jsonElement).put("owner", owner));
+        manager.getCollection().remove(card);
+        manager.write(); // Сохраняет коллекцию
+        return "Элемент удалён!";
+    };
+
+
+    private static Comandable searchCmd = (jsonElement, manager, id) -> {
+        Tags tags = new Tags(new JSONObject(jsonElement));
+        String tag = tags.getTags();
+        if (manager.getCollection().size() == 0) return "Коллекция пуста";
+        return manager.getCollection().stream().filter((s) -> s.getTags().contains(tag)).map(Task::toString).collect(Collectors.joining("\n+++++++++++++++++++++++++++++++++++++++++++++\n"));
+    };
+
+    private static Comandable lastCmd = (jsonElement, manager, id) -> {
+        if (manager.getCollection().size() == 0) return "Коллекция пуста";
+        return manager.getCollection().stream().map(Task::toString).collect(Collectors.joining());
+
+    };
+    /**
+     * Очищает коллекцию
+     */
+    private static Comandable clearCmd = ((jsonElement, manager, id) -> {
+        manager.getCollection().clear();
+        manager.write(); // Сохраняет коллекцию
+        return "Коллекция очищена!";
+    });
+    /**
+     * Выводит на экран иныормацию о коллекции
+     */
+    private static Comandable infoCmd = ((jsonElement, manager, id) -> {
+        return "Тип коллекции: " + manager.getCollection().getClass().getSimpleName() + "\n" +
+                "Дата инициализации коллекции: " + new Date().toString() + "\n" +
+                "Тип элементов коллекции: " + "Task" + "\n" +
+                "Количество элементов коллекции: " + manager.getCollection().size() + "\n" + "Готово!" + "\n";
+    });
+    /**
+     * Добавляет элемент в коллекцию
+     */
+    private static Comandable addCmd = (jsonElement, manager, id) -> {
+        String owner = ((Connection)Server.getConnections().get(id).attachment()).getLogin();
+        Task task = new Task(new JSONObject(jsonElement).put("owner", owner));
+        manager.getCollection().add(task);
+        manager.write(); // Сохраняет коллекцию
+        return "Элемент добавлен!";
+    };
+
+    /**
+     * Выводит на экран элементы коллекции
+     */
+    private static Comandable showCmd = ((jsonElement, manager, id) -> {
+        if (manager.getCollection().size() == 0) return "Коллекция пуста";
+        return manager.getCollection().stream().map(Task::toString).collect(Collectors.joining("\n+++++++++++++++++++++++++++++++++++++++++++++\n"));
+    });
+    /**
+     * Сохраняет коллекцию в файл
+     */
+    private static Comandable saveCmd = ((jsonElement, manager, id) -> {
+        manager.write();
+        return "Коллекция сохранена";
+    });
+    /**
+     * Завершает работу программы
+     */
+    private static Comandable exitCmd = ((jsonElement, manager, id) -> {
+        Server.getConnections().remove(id).cancel();
+        return "Завершение работы программы!";
+    });
+
+    /**
+     * Переносит данные нв сервер
+     */
+    private static Comandable importCmd = ((jsonElement, manager, id) -> {
+        String owner = ((Connection)Server.getConnections().get(id).attachment()).getLogin();
+        try {
+            if (jsonElement.length() != 0) {
+                JSONArray array = CDL.toJSONArray(jsonElement);
+
+                array.forEach(p -> {
+                    JSONObject o = (JSONObject) p;
+                    o.put("owner", owner);
+                    Task card = new Task(o);
+                    manager.getCollection().add(card);
+                });
+                manager.write(); // Сохраняет коллекцию
+            }
+
+            return "Данные загружены на сервер!";
+        } catch (Exception e) {
+            return e.getMessage();
+        }
+
+    });
+
+    /**
+     * Загружает данные
+     */
+    private static Comandable loadCmd = ((jsonElement, manager, id) -> {
+        manager.read();
+        return "Данные загружены";
+    });
+
+
+    /**
+     * Выводит на экран справку по программе
+     */
+    private static Comandable helpCmd = ((jsonElement, manager, id) -> "remove {element}: удалить элемент из коллекции по его значению\n" +
+            "search: поиск таска по тегу\n" +
+            "last: вывод последней таски\n" +
+            "clear: очистить коллекцию\n" +
+            "info: вывести в стандартный поток вывода информацию о коллекции (тип, дата инициализации, количество элементов и т.д.)\n" +
+            "add {element}: добавить новый элемент в коллекцию\n" +
+            "show: вывести в стандартный поток вывода все элементы коллекции в строковом представлении\n" +
+            "help: справка\n" +
+            "exit: выход из программы\n" +
+            "import: загрузка данныз на сервер\n" +
+            "load: загрузка\n" +
+            "Пример json элемента: \n" +
+            "{\"title\":\"test\",\"description\":\"testDesc\",\"deadline\":\"10.01.2022\",\"tags\":\"someTags\"}");
+    
+
+    /**
+     * Создаёт комманду
+     *
+     * @param userInput Строка с коммандой и данными в формате json
+     * @return Пара: ключ - сама команда, значение - данные комманды
+     */
+    public static Pair<Comandable, String> createCommand(String userInput) {
+
+
+
+        String jsonRegex = "\\{\"title\":\"(.+?)\",\"description\":\"(.+?)\",\"deadline\":\"(.+?)\",\"tags\":\"(.+?)\"}";
+
+        if (userInput.contains("search")){
+            jsonRegex = "\\{\"tags\":\"(.+?)\"}";
+            String jsonElement = findMatches(jsonRegex, userInput).get(0);
+            return new Pair<>(searchCmd, jsonElement);
+        }
+
+//        if (jsonRegex == "\\{\"title\":\"(.+?)\",\"description\":\"(.+?)\",\"deadline\":\"(.+?)\",\"tags\":\"(.+?)\"}") {
+//            jsonRegex = "\\{\"tags\":\"(.+?)\"}";
+//        } else {
+//            jsonRegex = "\\{\"sum\":\"(.+?)\"}";
+//        }
+//        String jsonRegex = "\\{\"title\":\"(.*?)\",\"description\":\"(.*?)\",\"deadline\":\"(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\s" +
+//                "(Jan|Feb|Mar|Apr|May|June|July|Aug|Sept|Oct|Nov|Dec)\\s[0-3]\\d\\s[0-2]\\d:[0-5]\\d:" +
+//                "[0-5]\\d\\sMSK\\s\\d{4}\",\"tags\":\"(.*?)\"}";
+
+        String dataCommandRegex = "(remove|search|add) " + jsonRegex;
+        String nodataCommandRegex = "show|info|exit|help|clear|save|load|last";
+
+        if (userInput.split(" ")[0].equals("import")) {
+            String[] array = userInput.split(" ", 2);
+            if (array.length == 2) {
+                String userFile = array[1];
+                return new Pair<>(importCmd, userFile);
+            } else {
+                return new Pair<>(null, "Был отправлен пустой файл");
+            }
+        }
+
+        if (userInput.split(" ", 2)[0].equals("remove")) {
+            List<String> matches = findMatches(jsonRegex, userInput);
+            if (matches.size() == 0) return new Pair<>(null, "Элемент для удаления не найден");
+            String jsonElement = matches.get(0);
+            return new Pair<>(removeCmd, jsonElement);
+        }
+
+        if (userInput.matches(dataCommandRegex)) {
+            String jsonElement = findMatches(jsonRegex, userInput).get(0);
+            String cmd = findMatches("(remove|search|add)", userInput).get(0);
+            switch (cmd) {
+                case "remove":
+                    return new Pair<>(removeCmd, jsonElement);
+                case "add":
+                    return new Pair<>(addCmd, jsonElement);
+                case "search":
+                    return new Pair<>(searchCmd, jsonElement);
+                default:
+                    return new Pair<>(null, jsonElement);
+            }
+        } else if (userInput.matches(nodataCommandRegex)) {
+            switch (userInput) {
+                case "show":
+                    return new Pair<>(showCmd, null);
+                case "info":
+                    return new Pair<>(infoCmd, null);
+                /*case "start": return new Pair<>(startCmd, null);*/
+                case "exit":
+                    return new Pair<>(exitCmd, null);
+                case "help":
+                    return new Pair<>(helpCmd, null);
+                case "clear":
+                    return new Pair<>(clearCmd, null);
+                case "save":
+                    return new Pair<>(saveCmd, null);
+                case "load":
+                    return new Pair<>(loadCmd, null);
+                case "last":
+                    return new Pair<>(lastCmd, null);
+                default:
+                    return new Pair<>(null, null);
+            }
+        } else {
+            return new Pair<>(null, null);
+        }
+
+    }
+
+    /**
+     * Ищет совпадения в строке
+     *
+     * @param patterStr Регулярное выражения для поиска
+     * @param text      Строка, в которой нужно найти
+     * @return Список совпадений
+     */
+    private static ArrayList<String> findMatches(String patterStr, String text) {
+        Pattern pattern = Pattern.compile(patterStr);
+        Matcher matcher = pattern.matcher(text);
+        ArrayList<String> collection = new ArrayList<>();
+        while (matcher.find()) {
+            collection.add(text.substring(matcher.start(), matcher.end()));
+        }
+        return collection;
+    }
+}
